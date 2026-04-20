@@ -110,6 +110,45 @@ APP_BASE_PATH=""
 - Uploaded files are served from `/storage/uploads/...`.
 - Local CSS and JS are served from `/assets/...`.
 
+## Offline Installation
+
+If the target machine has weak or no internet access, do not run Composer there.
+
+Correct approach:
+- run `composer install` on your own machine first
+- confirm [`vendor/`](/c:/xampp/htdocs/optionone.com/vendor) exists
+- copy the full project to the target machine, including `vendor/`
+
+Minimum folders and files to copy for an offline install:
+- `app/`
+- `assets/`
+- `config/`
+- `database/`
+- `helpers/`
+- `public/`
+- `storage/`
+- `vendor/`
+- `.env`
+- `composer.json`
+- `composer.lock`
+- `index.php`
+- `.htaccess`
+
+Suggested offline deployment flow:
+1. Prepare the app fully on your development machine.
+2. Run `composer install`.
+3. Configure `.env` for the target machine.
+4. Zip the project folder or copy it with a flash drive.
+5. Move it to the target PC.
+6. Configure XAMPP/Apache there.
+7. Create the database and import the SQL migrations.
+8. Start Apache and test `/login`.
+
+Important:
+- do not commit `vendor/` to GitHub
+- do include `vendor/` in your offline deployment package
+- do not expect the client machine to download dependencies if internet access is unreliable
+
 ## GitHub Workflow
 
 1. Initialize Git once:

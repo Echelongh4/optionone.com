@@ -82,3 +82,48 @@ Do not use `optionone.com` on client devices unless you intentionally want to ov
 - `/login`
 - `/register`
 - `/platform/setup`
+
+## 8. Offline Installation For Low-Internet Devices
+
+If the destination computer cannot reliably access the internet, prepare the app on another machine first.
+
+Do this on your development machine:
+
+1. Run:
+
+```powershell
+composer install
+```
+
+2. Confirm [`vendor/`](/c:/xampp/htdocs/optionone.com/vendor) exists.
+3. Set up `.env` for the target machine.
+4. Copy the full project to the destination PC.
+
+Include these items in the copied package:
+
+- `app/`
+- `assets/`
+- `config/`
+- `database/`
+- `helpers/`
+- `public/`
+- `storage/`
+- `vendor/`
+- `.env`
+- `composer.json`
+- `composer.lock`
+- `index.php`
+- `.htaccess`
+
+Then on the destination PC:
+
+1. Put the project in `C:\xampp\htdocs\`
+2. Configure Apache vhost and `hosts` entries
+3. Create the database
+4. Import the migrations
+5. Start Apache
+6. Open `/login`
+
+Rule:
+- `vendor/` should stay out of GitHub
+- `vendor/` should be included in offline deployment copies
