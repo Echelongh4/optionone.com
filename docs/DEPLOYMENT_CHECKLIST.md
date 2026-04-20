@@ -87,3 +87,4 @@ Use this checklist each time you install the application for a client.
 - [ ] Record the database credentials securely
 - [ ] Record the local domain used
 - [ ] Keep a backup of the prepared package
+- [ ] If needed, configure Windows auto-start for Apache and MySQL using [AUTO_START_WINDOWS.md](/c:/xampp/htdocs/optionone.com/docs/AUTO_START_WINDOWS.md)
