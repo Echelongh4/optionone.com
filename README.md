@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ECHELONGH TECHNOLOGY POS
 
 PHP 8 point-of-sale application with multi-company support, inventory, billing, reporting, and a local asset bundle.
@@ -99,3 +100,6 @@ PHP 8 point-of-sale application with multi-company support, inventory, billing, 
 - Do not commit `.env`.
 - Do not commit `vendor/` or runtime data under `storage/`.
 - If you change the host name, keep `.env` `APP_URL` in sync with Apache.
+=======
+# optionone.com
+>>>>>>> origin/main
