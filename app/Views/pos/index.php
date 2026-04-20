@@ -619,24 +619,24 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 
                 <div class="pos-payment-status-strip">
                     <div class="pos-mini-stat">
-                        <span>Required</span>
+                        <span>Amount Due</span>
                         <strong x-text="currency(computed.payment.required_collected)"></strong>
-                        <small>After credit</small>
+                        <small>Amount to collect now</small>
                     </div>
                     <div class="pos-mini-stat" :class="{ 'is-ready': computed.payment.remaining_due <= 0.009, 'is-warning': computed.payment.remaining_due > 0.009 }">
-                        <span>Remaining</span>
+                        <span>Still Due</span>
                         <strong x-text="currency(computed.payment.remaining_due)"></strong>
-                        <small x-text="computed.payment.remaining_due <= 0.009 ? 'Ready' : 'Still due'"></small>
+                        <small x-text="computed.payment.remaining_due <= 0.009 ? 'Fully covered' : 'Collect balance'"></small>
                     </div>
                     <div class="pos-mini-stat">
-                        <span>Cash Given</span>
+                        <span>Cash Received</span>
                         <strong x-text="currency(computed.payment.cash_tendered)"></strong>
-                        <small x-text="computed.payment.cash_tendered > 0.009 ? `${currency(computed.payment.cash_applied)} applied to the sale` : 'Type the amount handed over'"></small>
+                        <small x-text="computed.payment.cash_tendered > 0.009 ? `${currency(computed.payment.cash_applied)} applied to sale` : 'Enter amount received from customer'"></small>
                     </div>
                     <div class="pos-mini-stat" :class="{ 'is-ready': computed.payment.change_due > 0.009 }">
-                        <span>Change</span>
+                        <span>Change To Return</span>
                         <strong x-text="currency(computed.payment.change_due)"></strong>
-                        <small x-text="computed.payment.change_due > 0.009 ? 'Return to customer' : 'No change due'"></small>
+                        <small x-text="computed.payment.change_due > 0.009 ? 'Give back to customer' : 'No change to return'"></small>
                     </div>
                     <div class="pos-mini-stat">
                         <span>On account</span>
@@ -683,7 +683,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                             </div>
                             <div class="pos-payment-row__meta">
                                 <input type="text" class="form-control" x-model="payment.reference" :placeholder="paymentReferencePlaceholder(payment.method)">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" @click="fillRemaining(index)">Use Due</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @click="fillRemaining(index)">Use Exact Due</button>
                                 <button type="button" class="btn btn-outline-danger btn-sm" @click="removePayment(index)" :disabled="payments.length === 1">Remove</button>
                             </div>
                             <div class="pos-payment-row__detail-grid" x-show="payment.method === 'cheque'" x-cloak>

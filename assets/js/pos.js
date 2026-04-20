@@ -910,7 +910,7 @@
                 return lookup[normalizedMethod] || normalizedMethod.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
             },
             paymentAmountPlaceholder(method) {
-                return String(method || 'cash') === 'cash' ? 'Cash Given'
+                return String(method || 'cash') === 'cash' ? 'Cash Received'
                     : String(method || 'cash') === 'cheque' ? 'Cheque Amount'
                     : 'Amount';
             },
@@ -980,7 +980,7 @@
                 }
 
                 if (breakdown.tendered <= 0.009 && breakdown.due_before_cash > 0.009) {
-                    return `${this.currency(breakdown.due_before_cash)} is still expected in cash.`;
+                    return `${this.currency(breakdown.due_before_cash)} still needs to be received in cash.`;
                 }
 
                 if (breakdown.change_due > 0.009) {
@@ -992,7 +992,7 @@
                 }
 
                 if (breakdown.tendered > 0.009) {
-                    return `${this.currency(breakdown.tendered)} given exactly covers the cash balance.`;
+                    return `${this.currency(breakdown.tendered)} received exactly covers the cash balance.`;
                 }
 
                 return 'Enter the amount received from the customer.';
@@ -1004,7 +1004,7 @@
                 }
 
                 if (breakdown.change_due > 0.009) {
-                    return 'Return the highlighted change after checkout.';
+                    return 'Return the highlighted change to the customer after checkout.';
                 }
 
                 if (breakdown.remaining_due > 0.009) {
@@ -1012,7 +1012,7 @@
                 }
 
                 if (breakdown.tendered > 0.009) {
-                    return 'The cash tender matches the remaining sale balance.';
+                    return 'The cash received matches the remaining sale balance.';
                 }
 
                 return 'Use the amount the customer handed over, not just the sale total.';
@@ -1074,7 +1074,7 @@
                 }
 
                 if (this.computed.payment.change_due > 0.009) {
-                    return `${this.currency(this.computed.payment.change_due)} change due`;
+                    return `${this.currency(this.computed.payment.change_due)} to return`;
                 }
 
                 if (this.computed.payment.remaining_due > 0.009) {
@@ -1101,7 +1101,7 @@
                 }
 
                 if (this.computed.payment.change_due > 0.009) {
-                    return 'Change due';
+                    return 'Change to return';
                 }
 
                 if (this.computed.payment.remaining_due > 0.009) {
@@ -1136,7 +1136,7 @@
                 }
 
                 if (this.computed.payment.change_due > 0.009) {
-                    return 'Ready with change due';
+                    return 'Ready with change to return';
                 }
 
                 if (this.computed.payment.credit_amount > 0.009) {
@@ -1169,7 +1169,7 @@
                 }
 
                 if (this.computed.payment.change_due > 0.009) {
-                    return `${this.currency(this.computed.payment.change_due)} will be returned as change after the sale.`;
+                    return `${this.currency(this.computed.payment.change_due)} should be returned to the customer after the sale.`;
                 }
 
                 if (this.computed.payment.credit_amount > 0.009) {
@@ -1247,14 +1247,14 @@
                     summaryRows.push({ label: 'On account', value: this.currency(creditAmount) });
                 }
                 if (collectedAmount > 0.009) {
-                    summaryRows.push({ label: 'Collected', value: this.currency(collectedAmount) });
+                    summaryRows.push({ label: 'Received', value: this.currency(collectedAmount) });
                 }
                 if (cashTendered > 0.009) {
-                    summaryRows.push({ label: 'Cash given', value: this.currency(cashTendered) });
+                    summaryRows.push({ label: 'Cash received', value: this.currency(cashTendered) });
                 }
                 if (changeDue > 0.009) {
                     reviewPoints.push(`${this.currency(changeDue)} will be returned as change.`);
-                    summaryRows.push({ label: 'Change due', value: this.currency(changeDue) });
+                    summaryRows.push({ label: 'Change to return', value: this.currency(changeDue) });
                 }
                 if (manualDiscountTotal > 0.009 && (manualDiscountTotal >= 50 || manualDiscountRate >= 0.10)) {
                     reviewPoints.push(`${this.currency(manualDiscountTotal)} in manual discounts has been applied to this sale.`);
