@@ -149,6 +149,9 @@ Important:
 - do include `vendor/` in your offline deployment package
 - do not expect the client machine to download dependencies if internet access is unreliable
 
+Reusable field checklist:
+- see [docs/DEPLOYMENT_CHECKLIST.md](/c:/xampp/htdocs/optionone.com/docs/DEPLOYMENT_CHECKLIST.md)
+
 ## GitHub Workflow
 
 1. Initialize Git once:
