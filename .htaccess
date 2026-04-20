@@ -1,0 +1,13 @@
+Options -Indexes
+RewriteEngine On
+
+RewriteRule ^(?:app|config|database|docs|helpers|tools|vendor)(?:/|$) - [F,L,NC]
+RewriteRule ^storage(?:/(?!uploads(?:/|$)).*)?$ - [F,L,NC]
+RewriteRule ^(?:\.env(?:\..*)?|composer\.(?:json|lock)|README\.md|phpunit(?:\.xml(?:\.dist)?)?|\.git(?:ignore|attributes|modules))$ - [F,L,NC]
+
+RewriteCond %{REQUEST_URI} !^/assets/
+RewriteCond %{REQUEST_URI} !^/storage/uploads/
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]

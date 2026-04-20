@@ -1,0 +1,21 @@
+{
+  "name": "acme/pos-system",
+  "description": "Modern PHP 8 POS system with MVC architecture",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.1",
+    "ext-pdo": "*",
+    "dompdf/dompdf": "^3.0",
+    "phpmailer/phpmailer": "^6.10",
+    "phpoffice/phpspreadsheet": "^2.1"
+  },
+  "suggest": {
+    "mike42/escpos-php": "Required to enable direct ESC/POS thermal printing."
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  }
+}
