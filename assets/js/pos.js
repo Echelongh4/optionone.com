@@ -18,7 +18,7 @@
         const paymentRow = (method = 'cash', isAuto = null, amount = 0, details = {}) => {
             const normalizedMethod = String(method || 'cash');
             const resolvedAuto = isAuto === null
-                ? !['cash', 'cheque'].includes(normalizedMethod)
+                ? normalizedMethod !== 'cheque'
                 : Boolean(isAuto);
 
             return {
@@ -776,6 +776,14 @@
             },
             safeInteger(value) {
                 return Math.max(0, Math.floor(Number(value || 0)));
+            },
+            formatEditableNumber(value, fallback = '1') {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed) || parsed <= 0) {
+                    return fallback;
+                }
+
+                return Number.isInteger(parsed) ? String(parsed) : String(parsed);
             },
             escapeHtml(value) {
                 return String(value ?? '')
@@ -1543,6 +1551,43 @@
 
                 this.saveRecentProduct(productId);
                 this.recalculate();
+            },
+            handleQuantityInput(productId, rawValue) {
+                const line = this.cart.find((entry) => String(entry.product_id) === String(productId));
+                if (!line) {
+                    return;
+                }
+
+                const candidate = String(rawValue ?? '').trim();
+                if (candidate === '') {
+                    return;
+                }
+
+                const parsed = Number(candidate);
+                if (!Number.isFinite(parsed) || parsed <= 0) {
+                    return;
+                }
+
+                line.quantity = parsed;
+                this.recalculate();
+            },
+            commitQuantityInput(productId, event) {
+                const line = this.cart.find((entry) => String(entry.product_id) === String(productId));
+                const input = event?.target;
+                if (!line || !(input instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                const candidate = String(input.value ?? '').trim();
+                const parsed = Number(candidate);
+                if (!Number.isFinite(parsed) || parsed <= 0) {
+                    line.quantity = Math.max(1, this.safeNumber(line.quantity || 1));
+                } else {
+                    line.quantity = parsed;
+                }
+
+                this.recalculate();
+                input.value = this.formatEditableNumber(line.quantity);
             },
             changeQuantity(productId, delta) {
                 const line = this.cart.find((entry) => String(entry.product_id) === String(productId));

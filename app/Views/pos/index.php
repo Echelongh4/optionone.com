@@ -440,7 +440,14 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                             <div class="pos-cart-line__controls">
                                 <div class="qty-stepper">
                                     <button type="button" @click="changeQuantity(line.product.id, -1)">-</button>
-                                    <input type="number" min="1" step="0.01" x-model.number="line.source.quantity" @input.debounce.150ms="recalculate()">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        step="0.01"
+                                        :value="formatEditableNumber(line.source.quantity)"
+                                        @input="handleQuantityInput(line.product.id, $event.target.value)"
+                                        @blur="commitQuantityInput(line.product.id, $event)"
+                                    >
                                     <button type="button" @click="changeQuantity(line.product.id, 1)">+</button>
                                 </div>
 
