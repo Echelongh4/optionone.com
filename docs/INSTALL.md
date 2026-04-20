@@ -11,7 +11,7 @@ Set these values for your machine:
 ```env
 APP_ENV=local
 APP_DEBUG=true
-APP_URL="http://optionone.com"
+APP_URL="http://optionone.test"
 APP_BASE_PATH=""
 
 DB_HOST=127.0.0.1
@@ -61,6 +61,21 @@ Optional demo data:
 - Point the vhost document root to [`public/`](/c:/xampp/htdocs/optionone.com/public)
 - Alias `/assets/` to [`assets/`](/c:/xampp/htdocs/optionone.com/assets)
 - Alias `/storage/uploads/` to [`storage/uploads/`](/c:/xampp/htdocs/optionone.com/storage/uploads)
+- Prefer a local-only domain such as `optionone.test` instead of `optionone.com`
+
+Example local `hosts` file entry on the PC running XAMPP:
+
+```txt
+127.0.0.1 optionone.test
+```
+
+If another device on the same network must access the app, add this on that device:
+
+```txt
+172.20.10.5 optionone.test
+```
+
+Do not use `optionone.com` on client devices unless you intentionally want to override the real public domain.
 
 ## 7. Start Using the App
 

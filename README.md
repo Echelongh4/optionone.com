@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # ECHELONGH TECHNOLOGY POS
 
 PHP 8 point-of-sale application with multi-company support, inventory, billing, reporting, and a local asset bundle.
@@ -45,7 +44,7 @@ PHP 8 point-of-sale application with multi-company support, inventory, billing, 
 
 ```apache
 <VirtualHost *:80>
-    ServerName optionone.com
+    ServerName optionone.test
     DocumentRoot "C:/xampp/htdocs/optionone.com/public"
 
     <Directory "C:/xampp/htdocs/optionone.com/public">
@@ -70,11 +69,44 @@ PHP 8 point-of-sale application with multi-company support, inventory, billing, 
 </VirtualHost>
 ```
 
+## Local Domain Notes
+
+Do not use `optionone.com` on other devices unless you intentionally override the real public domain in that device's `hosts` file.
+
+Why:
+- your own machine can map `optionone.com` to localhost in its `hosts` file
+- another device will normally resolve `optionone.com` through public DNS
+- that sends the browser to the real website on the internet, not your local XAMPP server
+
+Recommended local-network setup:
+- use `optionone.test` or `optionone.local` instead of `optionone.com`
+- on the hosting PC, map the local domain to `127.0.0.1`
+- on the client device, map the same local domain to your host PC LAN IP, for example `172.20.10.5`
+
+Example `hosts` file entries:
+
+Host PC:
+```txt
+127.0.0.1 optionone.test
+```
+
+Client device:
+```txt
+172.20.10.5 optionone.test
+```
+
+Then set `.env` like this:
+
+```env
+APP_URL="http://optionone.test"
+APP_BASE_PATH=""
+```
+
 ## Daily Use
 
-- `http://optionone.com/login` opens the sign-in page.
-- `http://optionone.com/register` creates a new company workspace.
-- `http://optionone.com/platform/setup` bootstraps the first platform admin when none exists.
+- `http://optionone.test/login` opens the sign-in page.
+- `http://optionone.test/register` creates a new company workspace.
+- `http://optionone.test/platform/setup` bootstraps the first platform admin when none exists.
 - Uploaded files are served from `/storage/uploads/...`.
 - Local CSS and JS are served from `/assets/...`.
 
@@ -99,7 +131,4 @@ PHP 8 point-of-sale application with multi-company support, inventory, billing, 
 
 - Do not commit `.env`.
 - Do not commit `vendor/` or runtime data under `storage/`.
-- If you change the host name, keep `.env` `APP_URL` in sync with Apache.
-=======
-# optionone.com
->>>>>>> origin/main
+- If you change the host name, keep `.env` `APP_URL` in sync with Apache and the `hosts` file entries.
