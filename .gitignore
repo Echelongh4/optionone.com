@@ -2,6 +2,8 @@
 /vendor/
 /build/
 /node_modules/
+/database/sql/*
+!/database/sql/.gitkeep
 /storage/cache/*
 !/storage/cache/.gitkeep
 /storage/logs/*
