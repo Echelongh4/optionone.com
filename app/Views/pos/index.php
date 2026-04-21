@@ -444,8 +444,11 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                                         type="number"
                                         min="1"
                                         step="0.01"
-                                        :value="formatEditableNumber(line.source.quantity)"
+                                        :value="quantityInputValue(line.product.id, line.source.quantity)"
+                                        @focus="beginQuantityEdit(line.product.id, $event)"
                                         @input="handleQuantityInput(line.product.id, $event.target.value)"
+                                        @keydown.enter.prevent="$event.target.blur()"
+                                        @keydown.escape.prevent="cancelQuantityEdit(line.product.id, $event)"
                                         @blur="commitQuantityInput(line.product.id, $event)"
                                     >
                                     <button type="button" @click="changeQuantity(line.product.id, 1)">+</button>
@@ -679,7 +682,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                                     <option value="mobile_money">Mobile Money</option>
                                     <option value="credit" :disabled="!selectedCustomer">Open Account</option>
                                 </select>
-                                <input type="number" min="0" step="0.01" class="form-control" x-model.number="payment.amount" @input.debounce.150ms="handlePaymentAmountInput(index)" :placeholder="paymentAmountPlaceholder(payment.method)" :aria-label="paymentAmountPlaceholder(payment.method)" :data-payment-amount-index="index">
+                                <input type="number" min="0" step="0.01" class="form-control" :value="paymentAmountInputValue(index)" @focus="beginPaymentAmountEdit(index, $event)" @input.debounce.150ms="paymentAmountDrafts[index] = $event.target.value; handlePaymentAmountInput(index)" @keydown.enter.prevent="$event.target.blur()" @blur="endPaymentAmountEdit(index, $event)" :placeholder="paymentAmountPlaceholder(payment.method)" :aria-label="paymentAmountPlaceholder(payment.method)" :data-payment-amount-index="index">
                             </div>
                             <div class="pos-payment-row__meta">
                                 <input type="text" class="form-control" x-model="payment.reference" :placeholder="paymentReferencePlaceholder(payment.method)">
@@ -690,6 +693,17 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                                 <input type="text" class="form-control" x-model="payment.cheque_number" @input.debounce.150ms="handlePaymentDetailInput(index)" placeholder="Cheque number">
                                 <input type="text" class="form-control" x-model="payment.cheque_bank" @input.debounce.150ms="handlePaymentDetailInput(index)" placeholder="Bank name">
                                 <input type="date" class="form-control" x-model="payment.cheque_date" @change="handlePaymentDetailInput(index)" aria-label="Cheque date">
+                            </div>
+                            <div class="pos-payment-row__quickcash" x-show="payment.method === 'cash' && cashTenderSuggestions(index).length > 0" x-cloak>
+                                <template x-for="suggestion in cashTenderSuggestions(index)" :key="`${index}-${suggestion.label}-${suggestion.amount}`">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-secondary btn-sm"
+                                        :class="{ 'btn-primary': suggestion.tone === 'primary' }"
+                                        @click="applyCashTenderSuggestion(index, suggestion.amount)"
+                                        x-text="`${suggestion.label}: ${currency(suggestion.amount)}`"
+                                    ></button>
+                                </template>
                             </div>
                             <div class="pos-payment-row__support" x-show="payment.method === 'cash' || payment.method === 'cheque'" x-cloak>
                                 <strong x-text="payment.method === 'cash' ? cashPaymentSummary(index) : chequePaymentSummary(index)"></strong>

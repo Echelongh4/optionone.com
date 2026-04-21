@@ -83,6 +83,10 @@
             compactViewportQuery: null,
             pendingAction: '',
             pendingReceiptModal: null,
+            activeQuantityEditProductId: null,
+            quantityDrafts: {},
+            activePaymentAmountEditIndex: null,
+            paymentAmountDrafts: {},
             computed: {
                 lines: [],
                 lineCount: 0,
@@ -785,6 +789,24 @@
 
                 return Number.isInteger(parsed) ? String(parsed) : String(parsed);
             },
+            quantityInputValue(productId, quantity) {
+                const productKey = String(productId || '');
+                if (this.activeQuantityEditProductId === productKey
+                    && Object.prototype.hasOwnProperty.call(this.quantityDrafts, productKey)) {
+                    return this.quantityDrafts[productKey];
+                }
+
+                return this.formatEditableNumber(quantity);
+            },
+            paymentAmountInputValue(index) {
+                const paymentIndex = Number(index);
+                if (this.activePaymentAmountEditIndex === paymentIndex
+                    && Object.prototype.hasOwnProperty.call(this.paymentAmountDrafts, paymentIndex)) {
+                    return this.paymentAmountDrafts[paymentIndex];
+                }
+
+                return this.formatEditableNumber(this.payments[paymentIndex]?.amount, '0');
+            },
             escapeHtml(value) {
                 return String(value ?? '')
                     .replace(/&/g, '&amp;')
@@ -1016,6 +1038,76 @@
                 }
 
                 return 'Use the amount the customer handed over, not just the sale total.';
+            },
+            roundCurrencyAmount(amount) {
+                return Number(this.safeNumber(amount).toFixed(2));
+            },
+            roundUpCashAmount(amount, step) {
+                const safeStep = this.safeNumber(step);
+                const safeAmount = this.safeNumber(amount);
+                if (safeStep <= 0) {
+                    return this.roundCurrencyAmount(safeAmount);
+                }
+
+                return this.roundCurrencyAmount(Math.ceil(safeAmount / safeStep) * safeStep);
+            },
+            nextCashNoteAmount(amount) {
+                const due = this.safeNumber(amount);
+                const notes = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+                const match = notes.find((note) => note >= due - 0.0001);
+                return this.roundCurrencyAmount(match ?? this.roundUpCashAmount(due, 100));
+            },
+            cashTenderSuggestions(index) {
+                const payment = this.payments[index];
+                if (!payment || String(payment.method || 'cash') !== 'cash') {
+                    return [];
+                }
+
+                const breakdown = this.cashPaymentBreakdown(index);
+                if (breakdown.due_before_cash <= 0.009) {
+                    return [];
+                }
+
+                const due = this.roundCurrencyAmount(breakdown.due_before_cash);
+                const suggestions = [
+                    { label: 'Exact Due', amount: due, tone: 'primary' },
+                    { label: 'Round 1', amount: this.roundUpCashAmount(due, 1), tone: 'light' },
+                    { label: 'Round 5', amount: this.roundUpCashAmount(due, 5), tone: 'light' },
+                    { label: 'Next Note', amount: this.nextCashNoteAmount(due), tone: 'light' },
+                ];
+
+                const unique = [];
+                const seen = new Set();
+                suggestions.forEach((suggestion) => {
+                    const amountKey = this.roundCurrencyAmount(suggestion.amount).toFixed(2);
+                    if (this.safeNumber(suggestion.amount) <= 0.009 || seen.has(amountKey)) {
+                        return;
+                    }
+
+                    seen.add(amountKey);
+                    unique.push({
+                        ...suggestion,
+                        amount: this.roundCurrencyAmount(suggestion.amount),
+                    });
+                });
+
+                return unique.slice(0, 4);
+            },
+            applyCashTenderSuggestion(index, amount) {
+                const payment = this.payments[index];
+                if (!payment || String(payment.method || 'cash') !== 'cash') {
+                    return;
+                }
+
+                const paymentIndex = Number(index);
+                payment.is_auto = false;
+                payment.amount = this.roundCurrencyAmount(amount);
+                delete this.paymentAmountDrafts[paymentIndex];
+                if (this.activePaymentAmountEditIndex === paymentIndex) {
+                    this.activePaymentAmountEditIndex = null;
+                }
+                this.recalculate();
+                this.focusPaymentAmountInput(paymentIndex, true);
             },
             chequePaymentSummary(index) {
                 const payment = this.payments[index];
@@ -1552,6 +1644,13 @@
                 this.saveRecentProduct(productId);
                 this.recalculate();
             },
+            beginQuantityEdit(productId, event) {
+                const productKey = String(productId || '');
+                this.activeQuantityEditProductId = productKey;
+                this.quantityDrafts[productKey] = event?.target instanceof HTMLInputElement
+                    ? String(event.target.value ?? '')
+                    : this.formatEditableNumber(this.cart.find((entry) => String(entry.product_id) === productKey)?.quantity, '1');
+            },
             handleQuantityInput(productId, rawValue) {
                 const line = this.cart.find((entry) => String(entry.product_id) === String(productId));
                 if (!line) {
@@ -1559,6 +1658,7 @@
                 }
 
                 const candidate = String(rawValue ?? '').trim();
+                this.quantityDrafts[String(productId)] = candidate;
                 if (candidate === '') {
                     return;
                 }
@@ -1578,7 +1678,12 @@
                     return;
                 }
 
-                const candidate = String(input.value ?? '').trim();
+                const productKey = String(productId || '');
+                const candidate = String(
+                    Object.prototype.hasOwnProperty.call(this.quantityDrafts, productKey)
+                        ? this.quantityDrafts[productKey]
+                        : input.value ?? ''
+                ).trim();
                 const parsed = Number(candidate);
                 if (!Number.isFinite(parsed) || parsed <= 0) {
                     line.quantity = Math.max(1, this.safeNumber(line.quantity || 1));
@@ -1586,7 +1691,26 @@
                     line.quantity = parsed;
                 }
 
+                delete this.quantityDrafts[productKey];
+                if (this.activeQuantityEditProductId === productKey) {
+                    this.activeQuantityEditProductId = null;
+                }
                 this.recalculate();
+                input.value = this.formatEditableNumber(line.quantity);
+            },
+            cancelQuantityEdit(productId, event) {
+                const line = this.cart.find((entry) => String(entry.product_id) === String(productId));
+                const input = event?.target;
+                const productKey = String(productId || '');
+                if (!line || !(input instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                delete this.quantityDrafts[productKey];
+                if (this.activeQuantityEditProductId === productKey) {
+                    this.activeQuantityEditProductId = null;
+                }
+
                 input.value = this.formatEditableNumber(line.quantity);
             },
             changeQuantity(productId, delta) {
@@ -1595,6 +1719,11 @@
                     return;
                 }
 
+                const productKey = String(productId || '');
+                delete this.quantityDrafts[productKey];
+                if (this.activeQuantityEditProductId === productKey) {
+                    this.activeQuantityEditProductId = null;
+                }
                 line.quantity = Math.max(1, this.safeNumber(line.quantity) + Number(delta || 0));
                 this.recalculate();
             },
@@ -1669,8 +1798,56 @@
                     return;
                 }
 
+                const draft = String(this.paymentAmountDrafts[Number(index)] ?? '').trim();
                 payment.is_auto = false;
+                if (draft === '') {
+                    payment.amount = 0;
+                    this.recalculate();
+                    return;
+                }
+
+                const parsed = Number(draft);
+                if (Number.isFinite(parsed) && parsed >= 0) {
+                    payment.amount = parsed;
+                }
                 this.recalculate();
+            },
+            beginPaymentAmountEdit(index, event) {
+                const paymentIndex = Number(index);
+                this.activePaymentAmountEditIndex = paymentIndex;
+                this.paymentAmountDrafts[paymentIndex] = event?.target instanceof HTMLInputElement
+                    ? String(event.target.value ?? '')
+                    : this.formatEditableNumber(this.payments[paymentIndex]?.amount, '0');
+            },
+            endPaymentAmountEdit(index, event) {
+                const paymentIndex = Number(index);
+                const payment = this.payments[paymentIndex];
+                const input = event?.target;
+                if (!payment || !(input instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                const candidate = String(
+                    Object.prototype.hasOwnProperty.call(this.paymentAmountDrafts, paymentIndex)
+                        ? this.paymentAmountDrafts[paymentIndex]
+                        : input.value ?? ''
+                ).trim();
+                const parsed = Number(candidate);
+                if (candidate === '') {
+                    payment.amount = 0;
+                } else if (Number.isFinite(parsed) && parsed >= 0) {
+                    payment.amount = parsed;
+                } else {
+                    payment.amount = this.safeNumber(payment.amount);
+                }
+
+                delete this.paymentAmountDrafts[paymentIndex];
+                if (this.activePaymentAmountEditIndex === paymentIndex) {
+                    this.activePaymentAmountEditIndex = null;
+                }
+
+                this.recalculate();
+                input.value = this.paymentAmountInputValue(paymentIndex);
             },
             handlePaymentDetailInput(index) {
                 const payment = this.payments[index];
@@ -1852,6 +2029,24 @@
                     this.payments = normalizedPayments;
                     this.quickPaymentMethod = String(normalizedPayments[0]?.method || this.quickPaymentMethod || 'cash');
                     return changed;
+                }
+
+                if (normalizedPayments.length === 1) {
+                    const singlePayment = normalizedPayments[0];
+                    const hasReferenceData = String(singlePayment.reference || '').trim() !== ''
+                        || String(singlePayment.notes || '').trim() !== ''
+                        || String(singlePayment.cheque_number || '').trim() !== ''
+                        || String(singlePayment.cheque_bank || '').trim() !== ''
+                        || String(singlePayment.cheque_date || '').trim() !== '';
+                    const shouldRestoreAuto = !singlePayment.is_auto
+                        && this.activePaymentAmountEditIndex === null
+                        && this.safeNumber(singlePayment.amount) <= 0.009
+                        && !hasReferenceData;
+
+                    if (shouldRestoreAuto) {
+                        singlePayment.is_auto = String(singlePayment.method || 'cash') !== 'cheque';
+                        changed = true;
+                    }
                 }
 
                 const autoIndexes = normalizedPayments.reduce((indexes, payment, index) => {
