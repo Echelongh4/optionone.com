@@ -39,6 +39,14 @@ $tests['controller rejects non-array json payload'] = static function (): void {
     );
 };
 
+$tests['controller accepts empty payload as empty array'] = static function (): void {
+    $controller = new PosController();
+    $result = test_invoke_method($controller, 'decodeJson', ['', 'payments']);
+
+    test_assert_true(is_array($result), 'Empty payload should still decode to an array.');
+    test_assert_same([], $result, 'Empty payload should become an empty array.');
+};
+
 $tests['sale summarizes exact cash payment'] = static function (): void {
     $sale = new Sale();
     $summary = test_invoke_method($sale, 'summarizePayments', [[
@@ -85,6 +93,31 @@ $tests['sale rejects non-cash over-collection'] = static function (): void {
     );
 };
 
+$tests['sale rejects underpayment after allocations'] = static function (): void {
+    $sale = new Sale();
+
+    test_assert_throws(
+        static fn () => test_invoke_method($sale, 'summarizePayments', [[
+            ['method' => 'cash', 'amount' => 40],
+            ['method' => 'card', 'amount' => 20],
+        ], 100.0, null]),
+        HttpException::class,
+        'less than the balance due'
+    );
+};
+
+$tests['sale rejects credit above sale total'] = static function (): void {
+    $sale = new Sale();
+
+    test_assert_throws(
+        static fn () => test_invoke_method($sale, 'summarizePayments', [[
+            ['method' => 'credit', 'amount' => 120],
+        ], 100.0, 55]),
+        HttpException::class,
+        'Credit assigned cannot exceed the sale total'
+    );
+};
+
 $tests['sale supports mixed credit and cash settlement'] = static function (): void {
     $sale = new Sale();
     $summary = test_invoke_method($sale, 'summarizePayments', [[
@@ -112,6 +145,41 @@ $tests['draft cheque payments normalize date and reference'] = static function (
 
     test_assert_same('CHK-001', $payments[0]['reference'], 'Cheque reference should default to the cheque number.');
     test_assert_same('2026-04-21', $payments[0]['cheque_date'], 'Cheque date should be normalized.');
+};
+
+$tests['draft non-cheque payments drop cheque-only fields'] = static function (): void {
+    $sale = new Sale();
+    $payments = test_invoke_method($sale, 'sanitizeDraftPayments', [[
+        [
+            'method' => 'cash',
+            'amount' => 35,
+            'cheque_number' => 'CHK-999',
+            'cheque_bank' => 'Legacy Bank',
+            'cheque_date' => '2026-04-21',
+        ],
+    ], 77]);
+
+    test_assert_same(null, $payments[0]['cheque_number'], 'Cash drafts should not keep cheque numbers.');
+    test_assert_same(null, $payments[0]['cheque_bank'], 'Cash drafts should not keep cheque banks.');
+    test_assert_same(null, $payments[0]['cheque_date'], 'Cash drafts should not keep cheque dates.');
+};
+
+$tests['draft cheque payments reject invalid dates'] = static function (): void {
+    $sale = new Sale();
+
+    test_assert_throws(
+        static fn () => test_invoke_method($sale, 'sanitizeDraftPayments', [[
+            [
+                'method' => 'cheque',
+                'amount' => 50,
+                'cheque_number' => 'CHK-001',
+                'cheque_bank' => 'Bank A',
+                'cheque_date' => 'not-a-date',
+            ],
+        ], 77]),
+        HttpException::class,
+        'cheque dates are invalid'
+    );
 };
 
 $tests['draft credit payments require customer'] = static function (): void {

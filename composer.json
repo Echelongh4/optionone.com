@@ -17,5 +17,8 @@
     "psr-4": {
       "App\\": "app/"
     }
+  },
+  "scripts": {
+    "test:pos": "@php tests/pos_backend_regression.php"
   }
 }
