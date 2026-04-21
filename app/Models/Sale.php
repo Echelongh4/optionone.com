@@ -340,6 +340,7 @@ class Sale extends Model
 
         return Database::transaction(function () use ($compiled, $settlement, $customerId, $userId, $branchId, $notes, $heldSaleId): int {
             $existing = $this->resolveEditableHeldSale($heldSaleId, $branchId);
+            $this->lockAndValidateInventory($compiled['items'], $branchId);
             $saleId = $this->persistSaleHeader([
                 'branch_id' => $branchId,
                 'customer_id' => $customerId,
@@ -921,6 +922,57 @@ class Sale extends Model
             'credit_amount' => round($creditAmount, 2),
             'change_due' => round(max(0, $cashTendered - $cashRequired), 2),
         ];
+    }
+
+    private function lockAndValidateInventory(array $compiledItems, int $branchId): void
+    {
+        $requiredQuantities = [];
+        foreach ($compiledItems as $line) {
+            if ((int) ($line['track_stock'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $productId = (int) ($line['product_id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $requiredQuantities[$productId] = ($requiredQuantities[$productId] ?? 0) + (float) ($line['quantity'] ?? 0);
+        }
+
+        if ($requiredQuantities === []) {
+            return;
+        }
+
+        $productIds = array_keys($requiredQuantities);
+        sort($productIds);
+        $placeholders = implode(', ', array_fill(0, count($productIds), '?'));
+
+        $statement = $this->db->prepare(
+            "SELECT p.id, p.name, COALESCE(i.quantity_on_hand, 0) AS stock_quantity
+             FROM products p
+             LEFT JOIN inventory i ON i.product_id = p.id AND i.branch_id = ?
+             WHERE p.id IN ($placeholders)
+             FOR UPDATE"
+        );
+        $statement->execute(array_merge([$branchId], $productIds));
+        $rows = $statement->fetchAll();
+        $lockedInventory = [];
+
+        foreach ($rows as $row) {
+            $lockedInventory[(int) ($row['id'] ?? 0)] = $row;
+        }
+
+        foreach ($requiredQuantities as $productId => $requiredQuantity) {
+            $inventory = $lockedInventory[$productId] ?? null;
+            if ($inventory === null) {
+                throw new HttpException(500, 'Unable to lock stock for one or more products. Reload the POS page and try again.');
+            }
+
+            if ((float) ($inventory['stock_quantity'] ?? 0) + 0.0001 < $requiredQuantity) {
+                throw new HttpException(500, 'Insufficient stock for ' . (string) ($inventory['name'] ?? ('product #' . $productId)) . '.');
+            }
+        }
     }
 
     private function sanitizeDraftPayments(array $payments, ?int $customerId): array

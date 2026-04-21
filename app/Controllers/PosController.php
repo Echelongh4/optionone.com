@@ -123,8 +123,8 @@ class PosController extends Controller
             $this->redirect('pos');
         }
 
-        $cart = $this->decodeJson($request->input('cart_payload'));
-        $payments = $this->decodeJson($request->input('payments_payload'));
+        $cart = $this->decodeJson($request->input('cart_payload'), 'cart');
+        $payments = $this->decodeJson($request->input('payments_payload'), 'payments');
 
         try {
             $saleId = (new Sale())->hold(
@@ -220,8 +220,8 @@ class PosController extends Controller
             $this->redirect('pos');
         }
 
-        $cart = $this->decodeJson($request->input('cart_payload'));
-        $payments = $this->decodeJson($request->input('payments_payload'));
+        $cart = $this->decodeJson($request->input('cart_payload'), 'cart');
+        $payments = $this->decodeJson($request->input('payments_payload'), 'payments');
 
         try {
             $saleId = (new Sale())->checkout(
@@ -354,15 +354,23 @@ class PosController extends Controller
         $this->redirect('pos/receipt?id=' . $saleId);
     }
 
-    private function decodeJson(mixed $payload): array
+    private function decodeJson(mixed $payload, string $fieldLabel = 'payload'): array
     {
         if (!is_string($payload) || trim($payload) === '') {
             return [];
         }
 
-        $decoded = json_decode($payload, true);
+        try {
+            $decoded = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            throw new HttpException(500, 'The ' . $fieldLabel . ' data is invalid. Reload the POS page and try again.');
+        }
 
-        return is_array($decoded) ? $decoded : [];
+        if (!is_array($decoded)) {
+            throw new HttpException(500, 'The ' . $fieldLabel . ' data is invalid. Reload the POS page and try again.');
+        }
+
+        return $decoded;
     }
 
     private function branchId(): int
