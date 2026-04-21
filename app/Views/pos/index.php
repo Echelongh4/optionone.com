@@ -790,6 +790,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                     <input type="hidden" name="redeem_points" :value="safeInteger(redeemPoints)">
                     <input type="hidden" name="notes" :value="notes">
                     <input type="hidden" name="cart_payload" :value="cartPayload">
+                    <input type="hidden" name="payments_payload" :value="paymentsPayload">
                     <button x-ref="holdButton" type="submit" class="btn btn-outline-secondary w-100" :disabled="cart.length === 0 || pendingAction !== ''" @click.prevent="submitAction('hold', $event)">
                         <i class="bi bi-pause-circle me-1"></i><span x-text="holdButtonLabel()"></span>
                     </button>

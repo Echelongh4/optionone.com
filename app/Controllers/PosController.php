@@ -29,7 +29,10 @@ class PosController extends Controller
         $receiptModal = Session::pullFlash('pos_receipt_modal');
 
         if ($heldId > 0) {
-            $recallSale = $saleModel->findDetailed($heldId);
+            $recallSale = $saleModel->findDetailedForBranch($heldId, $this->branchId());
+            if ($recallSale !== null && (string) ($recallSale['status'] ?? '') !== 'held') {
+                $recallSale = null;
+            }
         }
 
         $seedCustomers = [];
@@ -121,10 +124,12 @@ class PosController extends Controller
         }
 
         $cart = $this->decodeJson($request->input('cart_payload'));
+        $payments = $this->decodeJson($request->input('payments_payload'));
 
         try {
             $saleId = (new Sale())->hold(
                 items: $cart,
+                payments: $payments,
                 orderDiscount: [
                     'type' => (string) $request->input('order_discount_type', 'fixed'),
                     'value' => (float) $request->input('order_discount_value', 0),
@@ -163,13 +168,16 @@ class PosController extends Controller
             'size' => 'lg',
         ];
         $redirect = 'pos';
+        $sale = (new Sale())->findDetailedForBranch($saleId, $this->branchId());
         $payload = [
             'success' => true,
             'message' => 'Sale held successfully.',
             'flash_message' => 'Sale held successfully.',
             'pos_action' => 'hold',
             'sale_id' => $saleId,
-            'held_sale' => $this->heldSaleSummary((new Sale())->findDetailed($saleId)),
+            'sale_number' => (string) ($sale['sale_number'] ?? ''),
+            'customer_name' => (string) ($sale['customer_name'] ?? 'Walk-in customer'),
+            'held_sale' => $this->heldSaleSummary($sale),
             'receiptModal' => $receiptModal,
         ];
         if (!$request->isAjax()) {
@@ -257,6 +265,7 @@ class PosController extends Controller
             'size' => 'lg',
         ];
         $redirect = 'pos';
+        $sale = (new Sale())->findDetailedForBranch($saleId, $this->branchId());
         $payload = [
             'success' => true,
             'message' => 'Sale completed successfully.',
@@ -264,6 +273,8 @@ class PosController extends Controller
             'pos_action' => 'checkout',
             'sale_id' => $saleId,
             'completed_sale_id' => $saleId,
+            'sale_number' => (string) ($sale['sale_number'] ?? ''),
+            'customer_name' => (string) ($sale['customer_name'] ?? 'Walk-in customer'),
             'held_sale_id' => $this->nullableInt($request->input('held_sale_id')),
             'receiptModal' => $receiptModal,
         ];
@@ -377,6 +388,7 @@ class PosController extends Controller
             'sale_number' => (string) ($sale['sale_number'] ?? ''),
             'grand_total' => (float) ($sale['grand_total'] ?? 0),
             'customer_name' => (string) ($sale['customer_name'] ?? 'Walk-in customer'),
+            'notes' => (string) ($sale['notes'] ?? ''),
             'created_at' => $createdAt,
             'created_label' => $createdAt !== '' ? date('M d, H:i', strtotime($createdAt)) : 'Queued',
         ];

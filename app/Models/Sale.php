@@ -280,12 +280,27 @@ class Sale extends Model
 
         return $sale;
     }
-    public function hold(array $items, array $orderDiscount, ?int $customerId, int $userId, int $branchId, string $notes = '', int $redeemPoints = 0, ?int $heldSaleId = null): int
+
+    public function findDetailedForBranch(int $saleId, int $branchId): ?array
+    {
+        $sale = $this->findDetailed($saleId);
+        if ($sale === null) {
+            return null;
+        }
+
+        if ((int) ($sale['branch_id'] ?? 0) !== $branchId) {
+            return null;
+        }
+
+        return $sale;
+    }
+    public function hold(array $items, array $payments, array $orderDiscount, ?int $customerId, int $userId, int $branchId, string $notes = '', int $redeemPoints = 0, ?int $heldSaleId = null): int
     {
         $compiled = $this->compileItems($items, $orderDiscount, $branchId, $customerId, $redeemPoints);
+        $draftPayments = $this->sanitizeDraftPayments($payments, $customerId);
 
-        return Database::transaction(function () use ($compiled, $customerId, $userId, $branchId, $notes, $heldSaleId): int {
-            $existing = $heldSaleId !== null ? $this->findDetailed($heldSaleId) : null;
+        return Database::transaction(function () use ($compiled, $draftPayments, $customerId, $userId, $branchId, $notes, $heldSaleId): int {
+            $existing = $this->resolveEditableHeldSale($heldSaleId, $branchId);
             $saleId = $this->persistSaleHeader([
                 'branch_id' => $branchId,
                 'customer_id' => $customerId,
@@ -308,7 +323,7 @@ class Sale extends Model
             ], $heldSaleId);
 
             $this->replaceSaleItems($saleId, $compiled['items']);
-            $this->replacePayments($saleId, []);
+            $this->replacePayments($saleId, $draftPayments);
 
             return $saleId;
         });
@@ -324,7 +339,7 @@ class Sale extends Model
         }
 
         return Database::transaction(function () use ($compiled, $settlement, $customerId, $userId, $branchId, $notes, $heldSaleId): int {
-            $existing = $heldSaleId !== null ? $this->findDetailed($heldSaleId) : null;
+            $existing = $this->resolveEditableHeldSale($heldSaleId, $branchId);
             $saleId = $this->persistSaleHeader([
                 'branch_id' => $branchId,
                 'customer_id' => $customerId,
@@ -583,6 +598,16 @@ class Sale extends Model
 
         $customer = $this->resolveCustomerPricing($customerId);
         $productIds = array_values(array_unique(array_map(static fn (array $item): int => (int) $item['product_id'], $items)));
+        $requestedQuantities = [];
+        foreach ($items as $item) {
+            $productId = (int) ($item['product_id'] ?? 0);
+            $quantity = max(1, (float) ($item['quantity'] ?? 1));
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $requestedQuantities[$productId] = ($requestedQuantities[$productId] ?? 0) + $quantity;
+        }
         $placeholders = implode(', ', array_fill(0, count($productIds), '?'));
         $statement = $this->db->prepare(
             "SELECT p.id, p.name, p.sku, p.barcode, p.price, p.cost_price, p.track_stock,
@@ -615,7 +640,8 @@ class Sale extends Model
                 throw new HttpException(500, 'One or more products are invalid.');
             }
 
-            if ((int) $product['track_stock'] === 1 && (float) $product['stock_quantity'] < $quantity) {
+            $requestedQuantity = (float) ($requestedQuantities[$productId] ?? $quantity);
+            if ((int) $product['track_stock'] === 1 && (float) $product['stock_quantity'] < $requestedQuantity) {
                 throw new HttpException(500, 'Insufficient stock for ' . $product['name'] . '.');
             }
 
@@ -897,6 +923,60 @@ class Sale extends Model
         ];
     }
 
+    private function sanitizeDraftPayments(array $payments, ?int $customerId): array
+    {
+        $allowedMethods = ['cash', 'card', 'mobile_money', 'cheque', 'split', 'credit'];
+        $sanitizedPayments = [];
+
+        foreach ($payments as $payment) {
+            $method = (string) ($payment['method'] ?? 'cash');
+            if (!in_array($method, $allowedMethods, true)) {
+                continue;
+            }
+
+            $amount = round((float) ($payment['amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            if ($method === 'credit' && $customerId === null) {
+                throw new HttpException(500, 'Select a customer before saving part of the sale to credit.');
+            }
+
+            $reference = trim((string) ($payment['reference'] ?? '')) ?: null;
+            $notes = trim((string) ($payment['notes'] ?? '')) ?: null;
+            $chequeNumber = trim((string) ($payment['cheque_number'] ?? '')) ?: null;
+            $chequeBank = trim((string) ($payment['cheque_bank'] ?? '')) ?: null;
+            $chequeDate = trim((string) ($payment['cheque_date'] ?? '')) ?: null;
+
+            if ($method !== 'cheque') {
+                $chequeNumber = null;
+                $chequeBank = null;
+                $chequeDate = null;
+            } elseif ($chequeDate !== null) {
+                $parsedChequeDate = date_create($chequeDate);
+                if ($parsedChequeDate === false) {
+                    throw new HttpException(500, 'One or more cheque dates are invalid.');
+                }
+
+                $chequeDate = $parsedChequeDate->format('Y-m-d');
+                $reference ??= $chequeNumber;
+            }
+
+            $sanitizedPayments[] = [
+                'method' => $method,
+                'amount' => $amount,
+                'reference' => $reference,
+                'notes' => $notes,
+                'cheque_number' => $chequeNumber,
+                'cheque_bank' => $chequeBank,
+                'cheque_date' => $chequeDate,
+            ];
+        }
+
+        return $sanitizedPayments;
+    }
+
     private function paymentDetailColumnsReady(): bool
     {
         if (self::$paymentDetailColumnsReady !== null) {
@@ -1068,6 +1148,24 @@ class Sale extends Model
         }
 
         return $customer;
+    }
+
+    private function resolveEditableHeldSale(?int $heldSaleId, int $branchId): ?array
+    {
+        if ($heldSaleId === null) {
+            return null;
+        }
+
+        $existing = $this->findDetailedForBranch($heldSaleId, $branchId);
+        if ($existing === null) {
+            throw new HttpException(404, 'The selected held sale could not be found for this branch.');
+        }
+
+        if ((string) ($existing['status'] ?? '') !== 'held') {
+            throw new HttpException(500, 'Only held sales can be resumed or updated from the POS.');
+        }
+
+        return $existing;
     }
 
     private function applyCustomerPricing(float $basePrice, ?array $customer): float
