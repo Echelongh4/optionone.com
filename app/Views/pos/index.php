@@ -326,6 +326,25 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                 <div class="pos-catalog-nav__actions">
                     <div class="pos-catalog-nav__meta" x-text="catalogPagerLabel"></div>
 
+                    <div class="btn-group" x-show="!isCompactViewport" x-cloak>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            :class="{ 'active': catalogViewMode === 'cards' }"
+                            @click="setCatalogViewMode('cards')"
+                        >
+                            Cards
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            :class="{ 'active': catalogViewMode === 'table' }"
+                            @click="setCatalogViewMode('table')"
+                        >
+                            Table
+                        </button>
+                    </div>
+
                     <label class="pos-catalog-nav__rows">
                         <span>Rows</span>
                         <select class="form-select form-select-sm pos-catalog-nav__select" x-model.number="catalogPageSize" @change="setCatalogPageSize($event.target.value)">
@@ -361,7 +380,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                 </div>
             </div>
 
-            <div class="pos-catalog-surface" x-show="catalogStats.filtered > 0" x-cloak>
+            <div class="pos-catalog-surface" x-show="catalogStats.filtered > 0 && catalogViewMode === 'cards'" x-cloak>
                 <div class="pos-catalog-list" role="list">
                     <template x-for="product in pagedCatalog" :key="product.id">
                         <article class="pos-catalog-item" :class="stockTone(product)" role="listitem">
@@ -394,6 +413,57 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                             </div>
                         </article>
                     </template>
+                </div>
+            </div>
+
+            <div class="pos-catalog-table-shell" x-show="catalogStats.filtered > 0 && !isCompactViewport && catalogViewMode === 'table'" x-cloak>
+                <div class="pos-catalog-table-scroller">
+                    <table class="pos-catalog-table">
+                        <thead>
+                            <tr>
+                                <th class="pos-catalog-table__action">Add</th>
+                                <th class="pos-catalog-table__product-cell">Product</th>
+                                <th class="pos-catalog-table__brand-head">Brand</th>
+                                <th class="pos-catalog-table__code-head">Code</th>
+                                <th class="pos-catalog-table__stock-head">Stock</th>
+                                <th class="pos-catalog-table__price-head">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="product in pagedCatalog" :key="`table-${product.id}`">
+                                <tr>
+                                    <td class="pos-catalog-table__action">
+                                        <button
+                                            type="button"
+                                            class="btn btn-primary pos-row-add"
+                                            @click="addProduct(product.id)"
+                                            :title="`Add ${product.name}`"
+                                        >
+                                            <i class="bi bi-plus-lg"></i>
+                                        </button>
+                                    </td>
+                                    <td class="pos-catalog-table__product-cell">
+                                        <div class="pos-catalog-table__product">
+                                            <strong x-text="product.name"></strong>
+                                            <small x-text="product.category_name || 'Ready for sale'"></small>
+                                        </div>
+                                    </td>
+                                    <td class="pos-catalog-table__brand" x-text="product.brand || 'Unbranded'"></td>
+                                    <td class="pos-catalog-table__code" x-text="product.sku || product.barcode || 'No code'"></td>
+                                    <td class="pos-catalog-table__stock-cell">
+                                        <span class="pos-stock-chip" :class="stockTone(product)" x-text="stockLabel(product)"></span>
+                                    </td>
+                                    <td class="pos-catalog-table__price-cell">
+                                        <div class="pos-catalog-table__price">
+                                            <strong x-text="currency(displayPrice(product))"></strong>
+                                            <small x-show="hasSpecialPricing(product)" x-cloak x-text="`Base ${currency(Number(product.price || 0))}`"></small>
+                                            <small x-show="!hasSpecialPricing(product)" x-cloak x-text="product.unit || 'unit'"></small>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

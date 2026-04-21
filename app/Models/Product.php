@@ -592,13 +592,17 @@ class Product extends Model
         $baseSql = $this->appendBranchScope($baseSql, $params, $branchId);
 
         if ($query !== '') {
-            $params['search'] = '%' . $query . '%';
+            $params['search_name'] = '%' . $query . '%';
+            $params['search_brand'] = '%' . $query . '%';
+            $params['search_sku'] = '%' . $query . '%';
+            $params['search_barcode'] = '%' . $query . '%';
+            $params['search_category'] = '%' . $query . '%';
             $baseSql .= ' AND (
-                p.name LIKE :search
-                OR COALESCE(p.brand, "") LIKE :search
-                OR COALESCE(p.sku, "") LIKE :search
-                OR COALESCE(p.barcode, "") LIKE :search
-                OR COALESCE(c.name, "") LIKE :search
+                p.name LIKE :search_name
+                OR COALESCE(p.brand, "") LIKE :search_brand
+                OR COALESCE(p.sku, "") LIKE :search_sku
+                OR COALESCE(p.barcode, "") LIKE :search_barcode
+                OR COALESCE(c.name, "") LIKE :search_category
             )';
         }
 
@@ -666,16 +670,19 @@ class Product extends Model
         if ($query !== '' && $sort === 'relevance') {
             $selectSql .= ' ORDER BY
                 CASE
-                    WHEN COALESCE(p.barcode, "") = :exact_query THEN 0
-                    WHEN COALESCE(p.sku, "") = :exact_query THEN 1
-                    WHEN p.name = :exact_query THEN 2
-                    WHEN p.name LIKE :starts_query THEN 3
-                    WHEN COALESCE(p.brand, "") LIKE :starts_query THEN 4
+                    WHEN COALESCE(p.barcode, "") = :exact_barcode_query THEN 0
+                    WHEN COALESCE(p.sku, "") = :exact_sku_query THEN 1
+                    WHEN p.name = :exact_name_query THEN 2
+                    WHEN p.name LIKE :starts_name_query THEN 3
+                    WHEN COALESCE(p.brand, "") LIKE :starts_brand_query THEN 4
                     ELSE 5
                 END,
                 p.name ASC';
-            $params['exact_query'] = $query;
-            $params['starts_query'] = $query . '%';
+            $params['exact_barcode_query'] = $query;
+            $params['exact_sku_query'] = $query;
+            $params['exact_name_query'] = $query;
+            $params['starts_name_query'] = $query . '%';
+            $params['starts_brand_query'] = $query . '%';
         } elseif ($sort === 'price') {
             $selectSql .= ' ORDER BY p.price ASC, p.name ASC';
         } elseif ($sort === 'stock') {

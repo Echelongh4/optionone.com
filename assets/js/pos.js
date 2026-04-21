@@ -56,6 +56,7 @@
             catalogPage: 1,
             catalogPageSize: 8,
             catalogSort: 'relevance',
+            catalogViewMode: 'cards',
             customerSearch: '',
             customerSearchRequest: null,
             customerLookupTimer: null,
@@ -429,6 +430,9 @@
                 const mediaQuery = window.matchMedia('(max-width: 991.98px)');
                 const syncViewport = () => {
                     this.isCompactViewport = mediaQuery.matches;
+                    if (this.isCompactViewport) {
+                        this.catalogViewMode = 'cards';
+                    }
                     if (!this.isCompactViewport) {
                         this.activeMobilePane = 'catalog';
                     }
@@ -818,6 +822,10 @@
                 this.catalogPage = 1;
                 this.scheduleCatalogLookup();
                 window.requestAnimationFrame(() => this.$refs.productSearch?.focus());
+            },
+            setCatalogViewMode(mode) {
+                const nextMode = String(mode || 'cards') === 'table' ? 'table' : 'cards';
+                this.catalogViewMode = this.isCompactViewport ? 'cards' : nextMode;
             },
             setCatalogPageSize(value) {
                 const nextSize = Number(value || this.catalogPageSize);
