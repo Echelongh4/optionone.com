@@ -1206,6 +1206,20 @@
 
                 return 'Payment covered';
             },
+            holdButtonLabel() {
+                return this.pendingAction === 'hold' ? 'Holding Sale...' : 'Hold Sale';
+            },
+            checkoutButtonLabel() {
+                return this.pendingAction === 'checkout' ? 'Processing Checkout...' : 'Checkout Sale';
+            },
+            actionShortcutHints() {
+                return [
+                    { key: '/', label: 'Product search' },
+                    { key: 'F7', label: 'Payment amount' },
+                    { key: 'F8', label: 'Hold sale' },
+                    { key: 'F9', label: 'Checkout sale' },
+                ];
+            },
             checkoutCalloutTitle() {
                 if (this.cart.length === 0) {
                     return 'Basket is empty';
@@ -2345,6 +2359,14 @@
 
                 await this.submitAction(kind, { currentTarget: submitter });
             },
+            focusPrimaryPaymentAmount() {
+                if (this.cart.length === 0) {
+                    return;
+                }
+
+                this.ensurePaymentRow();
+                this.focusPaymentAmountInput(0);
+            },
             async handleHotkeys(event) {
                 const target = event.target;
                 const isTyping = target instanceof HTMLElement && (
@@ -2358,6 +2380,12 @@
                     event.preventDefault();
                     this.$refs.productSearch?.focus();
                     this.$refs.productSearch?.select();
+                    return;
+                }
+
+                if (event.key === 'F7') {
+                    event.preventDefault();
+                    this.focusPrimaryPaymentAmount();
                     return;
                 }
 

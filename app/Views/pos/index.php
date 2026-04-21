@@ -716,12 +716,43 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                     </template>
                 </div>
             </section>
+
+            <section class="pos-checkout-card pos-checkout-card--notes" x-show="cart.length > 0" x-cloak>
+                <div class="pos-checkout-card__header">
+                    <div class="pos-checkout-card__copy">
+                        <p class="eyebrow mb-1">Cashier Note</p>
+                        <h4 class="mb-0">Sale note</h4>
+                    </div>
+                    <span class="badge-soft pos-checkout-card__badge" x-text="notes.trim() !== '' ? 'Attached to sale' : 'Optional'"></span>
+                </div>
+                <textarea
+                    x-ref="saleNotes"
+                    class="form-control"
+                    rows="3"
+                    x-model="notes"
+                    placeholder="Add a cashier note for this sale or held basket"
+                ></textarea>
+                <div class="small text-muted mt-2">
+                    Notes remain attached when you hold the sale and are submitted with checkout.
+                </div>
+            </section>
             </div>
 
             <div class="pos-action-row pos-checkout-rail__footer" x-ref="checkoutActions">
                 <div class="pos-action-row__meta">
                     <strong x-text="checkoutCalloutTitle()"></strong>
                     <small x-text="checkoutCalloutText()"></small>
+                    <div class="small text-muted mt-2" x-show="cart.length > 0" x-cloak>
+                        <span x-text="paymentStatusSummary()"></span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-2" x-show="cart.length > 0" x-cloak>
+                        <template x-for="shortcut in actionShortcutHints()" :key="shortcut.key">
+                            <span class="badge-soft">
+                                <strong x-text="shortcut.key"></strong>
+                                <span x-text="` ${shortcut.label}`"></span>
+                            </span>
+                        </template>
+                    </div>
                 </div>
                 <form x-ref="holdForm" action="<?= e(url('pos/hold')) ?>" method="post" class="pos-action-form" data-ajax="true" data-reload-on-success="false" data-loading-mode="pos" data-skip-app-loader="true">
                     <?= csrf_field() ?>
@@ -734,7 +765,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                     <input type="hidden" name="notes" :value="notes">
                     <input type="hidden" name="cart_payload" :value="cartPayload">
                     <button x-ref="holdButton" type="submit" class="btn btn-outline-secondary w-100" :disabled="cart.length === 0 || pendingAction !== ''" @click.prevent="submitAction('hold', $event)">
-                        <i class="bi bi-pause-circle me-1"></i>Hold Sale
+                        <i class="bi bi-pause-circle me-1"></i><span x-text="holdButtonLabel()"></span>
                     </button>
                 </form>
 
@@ -750,7 +781,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                     <input type="hidden" name="cart_payload" :value="cartPayload">
                     <input type="hidden" name="payments_payload" :value="paymentsPayload">
                     <button x-ref="checkoutButton" type="submit" class="btn btn-primary w-100" :disabled="!canCheckout || pendingAction !== ''" @click.prevent="submitAction('checkout', $event)">
-                        <i class="bi bi-cash-coin me-1"></i>Checkout Sale
+                        <i class="bi bi-cash-coin me-1"></i><span x-text="checkoutButtonLabel()"></span>
                     </button>
                 </form>
             </div>
