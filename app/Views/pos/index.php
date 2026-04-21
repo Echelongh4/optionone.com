@@ -169,6 +169,22 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
         </section>
     <?php endif; ?>
 
+    <section class="surface-card card-panel pos-resume-banner" x-show="lastCompletedSale" x-cloak>
+        <div>
+            <p class="eyebrow mb-1">Sale Completed</p>
+            <h4 class="mb-1" x-text="lastCompletedSale?.saleNumber || 'Sale completed'"></h4>
+            <div class="text-muted" x-text="lastCompletedSale ? `${lastCompletedSale.customerName} | ${currency(lastCompletedSale.total)} completed` : ''"></div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-outline-secondary" x-show="lastCompletedSale?.receiptModal?.href" @click="reopenLastReceipt()" x-cloak>
+                <i class="bi bi-receipt me-1"></i>Reopen Receipt
+            </button>
+            <button type="button" class="btn btn-outline-primary" @click="dismissCompletedSale()">
+                <i class="bi bi-check2 me-1"></i>Dismiss
+            </button>
+        </div>
+    </section>
+
     <div class="pos-mobile-switcher" x-show="isCompactViewport" x-cloak>
         <button
             type="button"
@@ -177,7 +193,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
             @click="switchMobilePane('catalog')"
         >
             <span>Catalog</span>
-            <small x-text="resultsSummary"></small>
+            <small x-text="exactCatalogMatch ? `Exact match: ${exactCatalogMatch.name}` : resultsSummary"></small>
         </button>
         <button
             type="button"
@@ -186,7 +202,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
             @click="switchMobilePane('cart')"
         >
             <span>Basket</span>
-            <small x-text="cart.length > 0 ? `${computed.lineCount} lines | ${currency(computed.totals.grand_total)}` : 'No items yet'"></small>
+            <small x-text="cart.length > 0 ? `${paymentStatusShort()} | ${currency(computed.totals.grand_total)}` : 'No items yet'"></small>
         </button>
     </div>
 
@@ -208,7 +224,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                             class="form-control"
                             x-model="search"
                             @input.debounce.120ms="resetCatalogPage()"
-                            @keydown.enter.prevent="addFirstVisibleProduct()"
+                            @keydown.enter.prevent="addExactOrFirstVisibleProduct()"
                             placeholder="Scan barcode or search name, brand, SKU, or category"
                             autocomplete="off"
                         >
@@ -253,11 +269,15 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
             <template x-if="heldSales.length > 0">
                 <div class="pos-held-strip pos-held-strip--compact">
                     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                        <strong>Held sales</strong>
+                        <strong x-text="heldSaleSearch.trim() === '' ? 'Held sales' : `Held sales (${heldSaleMatches.length})`"></strong>
                         <div class="small text-muted">Resume parked baskets without rebuilding them.</div>
                     </div>
+                    <div class="pos-customer-search mt-2">
+                        <i class="bi bi-search"></i>
+                        <input type="search" class="form-control" x-model="heldSaleSearch" placeholder="Filter held sales by number or customer">
+                    </div>
                     <div class="held-sale-list">
-                        <template x-for="sale in heldSales" :key="sale.id">
+                        <template x-for="sale in heldSaleMatches" :key="sale.id">
                             <a class="held-sale-pill" :href="`<?= e(url('pos')) ?>?held_id=${sale.id}`">
                                 <span>
                                     <strong x-text="sale.sale_number"></strong>
@@ -270,6 +290,9 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                             </a>
                         </template>
                     </div>
+                    <div class="small text-muted" x-show="heldSaleMatches.length === 0" x-cloak>
+                        No held sale matches this filter.
+                    </div>
                 </div>
             </template>
 
@@ -277,6 +300,9 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                 <div>
                     <h4 class="mb-0">Product catalog</h4>
                     <div class="small text-muted" x-text="catalogSummary"></div>
+                    <div class="small text-muted" x-show="exactCatalogMatch" x-cloak>
+                        Exact barcode/SKU match ready. Press <strong>Enter</strong> to add <span x-text="exactCatalogMatch?.name || ''"></span>.
+                    </div>
                 </div>
                 <span class="badge-soft" x-text="`${catalogStats.filtered} products`"></span>
             </div>
@@ -792,7 +818,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
         <div class="pos-mobile-cartbar__summary">
             <span class="pos-mobile-cartbar__eyebrow" x-text="`${computed.itemCount} item${computed.itemCount === 1 ? '' : 's'} in basket`"></span>
             <strong x-text="currency(computed.totals.grand_total)"></strong>
-            <small x-text="currency(computed.payment.remaining_due) + ' remaining'"></small>
+            <small x-text="paymentStatusSummary()"></small>
         </div>
         <div class="pos-mobile-cartbar__actions" x-show="activeMobilePane === 'catalog'" x-cloak>
             <button type="button" class="btn btn-outline-secondary" @click="switchMobilePane('cart')">Open Basket</button>

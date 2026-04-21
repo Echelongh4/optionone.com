@@ -47,6 +47,7 @@
             catalogLookupTimer: null,
             customers: Array.isArray(config.customers) ? [...config.customers] : [],
             heldSales: Array.isArray(config.heldSales) ? [...config.heldSales] : [],
+            heldSaleSearch: '',
             search: '',
             quickMode: 'all',
             brandFilter: '',
@@ -83,6 +84,7 @@
             compactViewportQuery: null,
             pendingAction: '',
             pendingReceiptModal: null,
+            lastCompletedSale: null,
             activeQuantityEditProductId: null,
             quantityDrafts: {},
             activePaymentAmountEditIndex: null,
@@ -303,6 +305,22 @@
             get catalogMatches() {
                 return this.catalog;
             },
+            get heldSaleMatches() {
+                const query = this.normalize(this.heldSaleSearch);
+                if (query === '') {
+                    return this.heldSales;
+                }
+
+                return this.heldSales.filter((sale) => {
+                    const haystack = this.normalize([
+                        sale.sale_number,
+                        sale.customer_name,
+                        sale.created_label,
+                    ].join(' '));
+
+                    return haystack.includes(query);
+                });
+            },
             get totalCatalogMatches() {
                 return Number(this.catalogFilteredTotal || 0);
             },
@@ -333,6 +351,22 @@
                 }
 
                 return `${total} product${total === 1 ? '' : 's'} ready`;
+            },
+            get exactCatalogMatch() {
+                const query = this.normalize(this.search);
+                if (query === '') {
+                    return null;
+                }
+
+                return this.catalog.find((product) => {
+                    const barcode = this.normalize(product.barcode);
+                    const sku = this.normalize(product.sku);
+                    const name = this.normalize(product.name);
+
+                    return (barcode !== '' && barcode === query)
+                        || (sku !== '' && sku === query)
+                        || name === query;
+                }) || null;
             },
             get cartPayload() {
                 return JSON.stringify(this.cart.map((line) => ({
@@ -428,7 +462,16 @@
                 window.clearTimeout(this.catalogLookupTimer);
                 this.catalogLookupTimer = window.setTimeout(() => {
                     this.fetchCatalog({ page: 1, keepPage: false });
-                }, 120);
+                }, this.catalogLookupDelay());
+            },
+            catalogLookupDelay() {
+                const query = String(this.search || '').trim();
+                if (query === '') {
+                    return 90;
+                }
+
+                const barcodeLike = /^[0-9A-Za-z\-]{6,}$/.test(query) && !/\s/.test(query);
+                return barcodeLike ? 45 : 120;
             },
             async fetchCatalog({ page = null, keepPage = true } = {}) {
                 const baseUrl = String(config.catalogUrl || '').trim();
@@ -575,6 +618,7 @@
                     }
                     this.resetCurrentSale();
                 } else if (action === 'checkout') {
+                    this.rememberCompletedSale(payload, receiptModal);
                     this.applyCompletedSaleStock();
                     if (payload.held_sale_id) {
                         this.removeHeldSale(payload.held_sale_id);
@@ -585,6 +629,30 @@
                 if (receiptModal) {
                     this.queueReceiptModal(receiptModal);
                 }
+            },
+            rememberCompletedSale(payload = {}, receiptModal = null) {
+                this.lastCompletedSale = {
+                    saleNumber: String(payload.sale_number || payload.invoice_number || payload.reference || 'Sale completed'),
+                    total: this.roundCurrencyAmount(this.computed.totals.grand_total),
+                    collected: this.roundCurrencyAmount(this.computed.payment.collected_amount),
+                    changeDue: this.roundCurrencyAmount(this.computed.payment.change_due),
+                    customerName: this.selectedCustomer ? this.selectedCustomer.full_name : 'Walk-in customer',
+                    receiptModal: receiptModal ? {
+                        href: String(receiptModal.href || ''),
+                        title: String(receiptModal.title || 'Receipt'),
+                        size: String(receiptModal.size || 'lg'),
+                    } : null,
+                };
+            },
+            dismissCompletedSale() {
+                this.lastCompletedSale = null;
+            },
+            reopenLastReceipt() {
+                if (!this.lastCompletedSale?.receiptModal?.href) {
+                    return;
+                }
+
+                this.openReceiptModal(this.lastCompletedSale.receiptModal);
             },
             queueReceiptModal(receiptModal) {
                 this.pendingReceiptModal = {
@@ -1637,6 +1705,18 @@
                     this.addProduct(this.pagedCatalog[0].id);
                 }
             },
+            addExactOrFirstVisibleProduct() {
+                const matchedProduct = this.exactCatalogMatch;
+                if (matchedProduct) {
+                    this.addProduct(matchedProduct.id);
+                    this.search = '';
+                    this.resetCatalogPage();
+                    window.requestAnimationFrame(() => this.$refs.productSearch?.focus());
+                    return;
+                }
+
+                this.addFirstVisibleProduct();
+            },
             addProduct(productId) {
                 const product = this.productById(productId);
                 if (!product) {
@@ -1657,6 +1737,9 @@
 
                 this.saveRecentProduct(productId);
                 this.recalculate();
+                if (this.isCompactViewport && this.activeMobilePane === 'catalog' && this.cart.length === 1) {
+                    this.switchMobilePane('cart');
+                }
             },
             beginQuantityEdit(productId, event) {
                 const productKey = String(productId || '');
