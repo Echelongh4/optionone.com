@@ -194,6 +194,86 @@ $tests['draft credit payments require customer'] = static function (): void {
     );
 };
 
+$tests['return lines compile proportional refund totals'] = static function (): void {
+    $sale = new Sale();
+    $compiled = test_invoke_method($sale, 'compileReturnLines', [[
+        [
+            'id' => 10,
+            'product_id' => 44,
+            'product_name' => 'Blue Pen',
+            'quantity' => 4,
+            'returned_quantity' => 1,
+            'unit_price' => 15,
+            'tax_total' => 6,
+            'line_total' => 66,
+        ],
+    ], [
+        [
+            'sale_item_id' => 10,
+            'quantity' => 2,
+            'reason' => '',
+        ],
+    ], 'Damaged item']);
+
+    test_assert_same(1, count($compiled['lines']), 'One return line should be compiled.');
+    test_assert_same(30.0, round((float) $compiled['subtotal'], 2), 'Subtotal should reflect returned quantity times unit price.');
+    test_assert_same(3.0, round((float) $compiled['tax_total'], 2), 'Tax should scale proportionally to the returned quantity.');
+    test_assert_same(33.0, round((float) $compiled['refund_total'], 2), 'Refund total should scale proportionally to the returned line total.');
+    test_assert_same('Damaged item', $compiled['lines'][0]['reason'], 'Blank line reasons should inherit the default reason.');
+};
+
+$tests['return lines reject quantities above remaining balance'] = static function (): void {
+    $sale = new Sale();
+
+    test_assert_throws(
+        static fn () => test_invoke_method($sale, 'compileReturnLines', [[
+            [
+                'id' => 10,
+                'product_id' => 44,
+                'product_name' => 'Blue Pen',
+                'quantity' => 4,
+                'returned_quantity' => 3,
+                'unit_price' => 15,
+                'tax_total' => 6,
+                'line_total' => 66,
+            ],
+        ], [
+            [
+                'sale_item_id' => 10,
+                'quantity' => 2,
+            ],
+        ], 'Customer return']),
+        HttpException::class,
+        'exceeds the remaining quantity'
+    );
+};
+
+$tests['return lines require at least one valid quantity'] = static function (): void {
+    $sale = new Sale();
+
+    test_assert_throws(
+        static fn () => test_invoke_method($sale, 'compileReturnLines', [[
+            [
+                'id' => 10,
+                'product_id' => 44,
+                'product_name' => 'Blue Pen',
+                'quantity' => 4,
+                'returned_quantity' => 0,
+                'unit_price' => 15,
+                'tax_total' => 6,
+                'line_total' => 66,
+            ],
+        ], [
+            [
+                'sale_item_id' => 10,
+                'quantity' => 0,
+            ],
+        ], 'Customer return']),
+        HttpException::class,
+        'Add at least one return line'
+    );
+};
+
 $failures = [];
 
 foreach ($tests as $label => $callback) {

@@ -400,61 +400,10 @@ class Sale extends Model
     }
     public function processReturn(int $saleId, array $returnLines, string $reason, int $userId, int $branchId): int
     {
-        $sale = $this->findDetailed($saleId);
+        return Database::transaction(function () use ($saleId, $returnLines, $reason, $userId, $branchId): int {
+            $sale = $this->loadReturnableSaleForUpdate($saleId, $branchId);
+            $processed = $this->compileReturnLines($this->loadSaleItemsForReturn($saleId), $returnLines, $reason);
 
-        if ($sale === null || !in_array($sale['status'], ['completed', 'partial_return'], true)) {
-            throw new HttpException(500, 'Only completed sales can be returned.');
-        }
-
-        $lineMap = [];
-        foreach ($sale['items'] as $item) {
-            $lineMap[(int) $item['id']] = $item;
-        }
-
-        $processedLines = [];
-        $subtotal = 0.0;
-        $taxTotal = 0.0;
-        $refundTotal = 0.0;
-
-        foreach ($returnLines as $payload) {
-            $saleItemId = (int) ($payload['sale_item_id'] ?? 0);
-            $quantity = (float) ($payload['quantity'] ?? 0);
-            $item = $lineMap[$saleItemId] ?? null;
-
-            if ($item === null || $quantity <= 0) {
-                continue;
-            }
-
-            $remaining = (float) $item['quantity'] - (float) $item['returned_quantity'];
-            if ($quantity > $remaining) {
-                throw new HttpException(500, 'Return quantity exceeds the remaining quantity for ' . $item['product_name'] . '.');
-            }
-
-            $ratio = $quantity / max((float) $item['quantity'], 1);
-            $lineSubtotal = (float) $item['unit_price'] * $quantity;
-            $lineTax = (float) $item['tax_total'] * $ratio;
-            $lineTotal = (float) $item['line_total'] * $ratio;
-
-            $subtotal += $lineSubtotal;
-            $taxTotal += $lineTax;
-            $refundTotal += $lineTotal;
-
-            $processedLines[] = [
-                'sale_item_id' => $saleItemId,
-                'product_id' => (int) $item['product_id'],
-                'quantity' => $quantity,
-                'unit_price' => (float) $item['unit_price'],
-                'tax_total' => $lineTax,
-                'line_total' => $lineTotal,
-                'reason' => $payload['reason'] ?? $reason,
-            ];
-        }
-
-        if ($processedLines === []) {
-            throw new HttpException(500, 'Add at least one return line.');
-        }
-
-        return Database::transaction(function () use ($sale, $processedLines, $subtotal, $taxTotal, $refundTotal, $reason, $userId, $branchId): int {
             $this->db->prepare(
                 'INSERT INTO returns (sale_id, user_id, customer_id, return_number, reason, status, subtotal, tax_total, total_refund, approved_by, created_at, updated_at)
                  VALUES (:sale_id, :user_id, :customer_id, :return_number, :reason, "completed", :subtotal, :tax_total, :total_refund, :approved_by, NOW(), NOW())'
@@ -464,15 +413,15 @@ class Sale extends Model
                 'customer_id' => $sale['customer_id'],
                 'return_number' => $this->generateSaleNumber('RET'),
                 'reason' => $reason,
-                'subtotal' => $subtotal,
-                'tax_total' => $taxTotal,
-                'total_refund' => $refundTotal,
+                'subtotal' => $processed['subtotal'],
+                'tax_total' => $processed['tax_total'],
+                'total_refund' => $processed['refund_total'],
                 'approved_by' => $userId,
             ]);
             $returnId = (int) $this->db->lastInsertId();
 
             $productModel = new Product();
-            foreach ($processedLines as $line) {
+            foreach ($processed['lines'] as $line) {
                 $this->db->prepare(
                     'INSERT INTO return_items (return_id, sale_item_id, product_id, quantity, unit_price, tax_total, line_total, reason, created_at)
                      VALUES (:return_id, :sale_item_id, :product_id, :quantity, :unit_price, :tax_total, :line_total, :reason, NOW())'
@@ -489,7 +438,7 @@ class Sale extends Model
 
                 $productModel->adjustInventory(
                     productId: $line['product_id'],
-                    branchId: $branchId,
+                    branchId: (int) $sale['branch_id'],
                     quantityChange: (float) $line['quantity'],
                     movementType: 'return',
                     reason: 'Customer return processed',
@@ -515,7 +464,7 @@ class Sale extends Model
             if ($customerId !== null) {
                 $creditExposure = $this->creditExposureForSale((int) $sale['id']);
                 $availableBalance = $this->currentCustomerCreditBalance($customerId);
-                $creditRelief = min($refundTotal, $creditExposure, $availableBalance);
+                $creditRelief = min($processed['refund_total'], $creditExposure, $availableBalance);
 
                 if ($creditRelief > 0.0001) {
                     (new Customer())->adjustCreditBalance(
@@ -532,6 +481,107 @@ class Sale extends Model
 
             return $returnId;
         });
+    }
+
+    private function loadReturnableSaleForUpdate(int $saleId, int $branchId): array
+    {
+        $sale = $this->fetch(
+            'SELECT id, branch_id, customer_id, grand_total, status
+             FROM sales
+             WHERE id = :id
+             LIMIT 1
+             FOR UPDATE',
+            ['id' => $saleId]
+        );
+
+        if ($sale === null || (int) ($sale['branch_id'] ?? 0) !== $branchId) {
+            throw new HttpException(404, 'Sale not found for this branch.');
+        }
+
+        if (!in_array((string) ($sale['status'] ?? ''), ['completed', 'partial_return'], true)) {
+            throw new HttpException(500, 'Only completed sales can be returned.');
+        }
+
+        return $sale;
+    }
+
+    private function loadSaleItemsForReturn(int $saleId): array
+    {
+        return $this->fetchAll(
+            'SELECT si.*,
+                    COALESCE(rq.returned_quantity, 0) AS returned_quantity
+             FROM sale_items si
+             LEFT JOIN (
+                 SELECT ri.sale_item_id, SUM(ri.quantity) AS returned_quantity
+                 FROM return_items ri
+                 INNER JOIN returns r ON r.id = ri.return_id
+                 WHERE r.sale_id = :sale_id
+                   AND r.status = "completed"
+                 GROUP BY ri.sale_item_id
+             ) rq ON rq.sale_item_id = si.id
+             WHERE si.sale_id = :sale_id
+             ORDER BY si.id
+             FOR UPDATE',
+            ['sale_id' => $saleId]
+        );
+    }
+
+    private function compileReturnLines(array $saleItems, array $returnLines, string $defaultReason): array
+    {
+        $lineMap = [];
+        foreach ($saleItems as $item) {
+            $lineMap[(int) $item['id']] = $item;
+        }
+
+        $processedLines = [];
+        $subtotal = 0.0;
+        $taxTotal = 0.0;
+        $refundTotal = 0.0;
+
+        foreach ($returnLines as $payload) {
+            $saleItemId = (int) ($payload['sale_item_id'] ?? 0);
+            $quantity = round((float) ($payload['quantity'] ?? 0), 4);
+            $item = $lineMap[$saleItemId] ?? null;
+
+            if ($item === null || $quantity <= 0) {
+                continue;
+            }
+
+            $remaining = round((float) $item['quantity'] - (float) $item['returned_quantity'], 4);
+            if ($quantity > $remaining + 0.0001) {
+                throw new HttpException(500, 'Return quantity exceeds the remaining quantity for ' . $item['product_name'] . '.');
+            }
+
+            $ratio = $quantity / max((float) $item['quantity'], 1);
+            $lineSubtotal = (float) $item['unit_price'] * $quantity;
+            $lineTax = (float) $item['tax_total'] * $ratio;
+            $lineTotal = (float) $item['line_total'] * $ratio;
+
+            $subtotal += $lineSubtotal;
+            $taxTotal += $lineTax;
+            $refundTotal += $lineTotal;
+
+            $processedLines[] = [
+                'sale_item_id' => $saleItemId,
+                'product_id' => (int) $item['product_id'],
+                'quantity' => $quantity,
+                'unit_price' => (float) $item['unit_price'],
+                'tax_total' => $lineTax,
+                'line_total' => $lineTotal,
+                'reason' => trim((string) ($payload['reason'] ?? '')) ?: $defaultReason,
+            ];
+        }
+
+        if ($processedLines === []) {
+            throw new HttpException(500, 'Add at least one return line.');
+        }
+
+        return [
+            'lines' => $processedLines,
+            'subtotal' => $subtotal,
+            'tax_total' => $taxTotal,
+            'refund_total' => $refundTotal,
+        ];
     }
     public function voidSale(int $saleId, string $reason, int $approvedBy, int $branchId): void
     {
