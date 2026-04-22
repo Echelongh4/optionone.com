@@ -67,6 +67,7 @@
             redeemPoints: Number(config.recall?.redeem_points || 0),
             notes: config.recall?.notes || '',
             heldSaleId: String(config.recall?.held_sale_id || ''),
+            heldSaleToken: String(config.recall?.held_sale_token || ''),
             quickPaymentMethod: String(config.recall?.payments?.[0]?.method || 'cash'),
             cart: Array.isArray(config.recall?.cart)
                 ? config.recall.cart.map((line) => ({
@@ -684,6 +685,7 @@
                 this.orderDiscountValue = 0;
                 this.redeemPoints = 0;
                 this.heldSaleId = '';
+                this.heldSaleToken = '';
                 this.quickPaymentMethod = 'cash';
                 this.payments = [paymentRow('cash')];
                 this.recalculate();

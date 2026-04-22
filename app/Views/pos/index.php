@@ -5,6 +5,7 @@ $catalogFilteredTotal = (int) ($catalogFilteredTotal ?? count($catalog));
 $customers = $customers ?? [];
 $heldSales = $heldSales ?? [];
 $recallSale = $recallSale ?? null;
+$recallToken = (string) ($recallToken ?? '');
 $receiptModal = $receiptModal ?? null;
 $holdSubmissionKey = $holdSubmissionKey ?? '';
 $checkoutSubmissionKey = $checkoutSubmissionKey ?? '';
@@ -88,6 +89,7 @@ $recallSeed = null;
 if (is_array($recallSale)) {
     $recallSeed = [
         'held_sale_id' => (string) ($recallSale['id'] ?? ''),
+        'held_sale_token' => $recallToken,
         'sale_number' => (string) ($recallSale['sale_number'] ?? ''),
         'customer_id' => $recallSale['customer_id'] !== null ? (string) $recallSale['customer_id'] : '',
         'customer_name' => (string) ($recallSale['customer_name'] ?? 'Walk-in Customer'),
@@ -855,6 +857,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                     <input type="hidden" name="submission_key" value="<?= e((string) $holdSubmissionKey) ?>">
                     <input type="hidden" name="customer_id" :value="selectedCustomerId">
                     <input type="hidden" name="held_sale_id" :value="heldSaleId">
+                    <input type="hidden" name="held_sale_token" :value="heldSaleToken">
                     <input type="hidden" name="order_discount_type" :value="orderDiscountType">
                     <input type="hidden" name="order_discount_value" :value="safeNumber(orderDiscountValue)">
                     <input type="hidden" name="redeem_points" :value="safeInteger(redeemPoints)">
@@ -871,6 +874,7 @@ $seedOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
                     <input type="hidden" name="submission_key" value="<?= e((string) $checkoutSubmissionKey) ?>">
                     <input type="hidden" name="customer_id" :value="selectedCustomerId">
                     <input type="hidden" name="held_sale_id" :value="heldSaleId">
+                    <input type="hidden" name="held_sale_token" :value="heldSaleToken">
                     <input type="hidden" name="order_discount_type" :value="orderDiscountType">
                     <input type="hidden" name="order_discount_value" :value="safeNumber(orderDiscountValue)">
                     <input type="hidden" name="redeem_points" :value="safeInteger(redeemPoints)">

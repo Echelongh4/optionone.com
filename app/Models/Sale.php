@@ -294,13 +294,13 @@ class Sale extends Model
 
         return $sale;
     }
-    public function hold(array $items, array $payments, array $orderDiscount, ?int $customerId, int $userId, int $branchId, string $notes = '', int $redeemPoints = 0, ?int $heldSaleId = null): int
+    public function hold(array $items, array $payments, array $orderDiscount, ?int $customerId, int $userId, int $branchId, string $notes = '', int $redeemPoints = 0, ?int $heldSaleId = null, ?string $heldSaleToken = null): int
     {
         $compiled = $this->compileItems($items, $orderDiscount, $branchId, $customerId, $redeemPoints);
         $draftPayments = $this->sanitizeDraftPayments($payments, $customerId);
 
-        return Database::transaction(function () use ($compiled, $draftPayments, $customerId, $userId, $branchId, $notes, $heldSaleId): int {
-            $existing = $this->resolveEditableHeldSale($heldSaleId, $branchId);
+        return Database::transaction(function () use ($compiled, $draftPayments, $customerId, $userId, $branchId, $notes, $heldSaleId, $heldSaleToken): int {
+            $existing = $this->resolveEditableHeldSale($heldSaleId, $branchId, $heldSaleToken);
             $saleId = $this->persistSaleHeader([
                 'branch_id' => $branchId,
                 'customer_id' => $customerId,
@@ -329,7 +329,7 @@ class Sale extends Model
         });
     }
 
-    public function checkout(array $items, array $payments, array $orderDiscount, ?int $customerId, int $userId, int $branchId, string $notes = '', int $redeemPoints = 0, ?int $heldSaleId = null): int
+    public function checkout(array $items, array $payments, array $orderDiscount, ?int $customerId, int $userId, int $branchId, string $notes = '', int $redeemPoints = 0, ?int $heldSaleId = null, ?string $heldSaleToken = null): int
     {
         $compiled = $this->compileItems($items, $orderDiscount, $branchId, $customerId, $redeemPoints);
         $settlement = $this->summarizePayments($payments, $compiled['totals']['grand_total'], $customerId);
@@ -338,8 +338,8 @@ class Sale extends Model
             throw new HttpException(500, 'The cart total must be greater than zero.');
         }
 
-        return Database::transaction(function () use ($compiled, $settlement, $customerId, $userId, $branchId, $notes, $heldSaleId): int {
-            $existing = $this->resolveEditableHeldSale($heldSaleId, $branchId);
+        return Database::transaction(function () use ($compiled, $settlement, $customerId, $userId, $branchId, $notes, $heldSaleId, $heldSaleToken): int {
+            $existing = $this->resolveEditableHeldSale($heldSaleId, $branchId, $heldSaleToken);
             $this->lockAndValidateInventory($compiled['items'], $branchId);
             $saleId = $this->persistSaleHeader([
                 'branch_id' => $branchId,
@@ -1252,19 +1252,47 @@ class Sale extends Model
         return $customer;
     }
 
-    private function resolveEditableHeldSale(?int $heldSaleId, int $branchId): ?array
+    public function heldSaleResumeToken(?array $sale): string
+    {
+        if (!is_array($sale) || (int) ($sale['id'] ?? 0) <= 0) {
+            return '';
+        }
+
+        return hash('sha256', implode('|', [
+            (string) ($sale['id'] ?? ''),
+            (string) ($sale['status'] ?? ''),
+            (string) ($sale['updated_at'] ?? ''),
+            (string) ($sale['held_until'] ?? ''),
+            number_format((float) ($sale['grand_total'] ?? 0), 2, '.', ''),
+        ]));
+    }
+
+    private function resolveEditableHeldSale(?int $heldSaleId, int $branchId, ?string $heldSaleToken = null): ?array
     {
         if ($heldSaleId === null) {
             return null;
         }
 
-        $existing = $this->findDetailedForBranch($heldSaleId, $branchId);
-        if ($existing === null) {
+        $existing = $this->fetch(
+            'SELECT *
+             FROM sales
+             WHERE id = :id
+             LIMIT 1
+             FOR UPDATE',
+            ['id' => $heldSaleId]
+        );
+
+        if ($existing === null || (int) ($existing['branch_id'] ?? 0) !== $branchId) {
             throw new HttpException(404, 'The selected held sale could not be found for this branch.');
         }
 
         if ((string) ($existing['status'] ?? '') !== 'held') {
             throw new HttpException(500, 'Only held sales can be resumed or updated from the POS.');
+        }
+
+        $expectedToken = trim((string) $heldSaleToken);
+        if ($expectedToken !== '' && !hash_equals($this->heldSaleResumeToken($existing), $expectedToken)) {
+            throw new HttpException(409, 'This held sale changed on another register or tab. Reload it before continuing.');
         }
 
         return $existing;

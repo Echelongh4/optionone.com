@@ -25,6 +25,7 @@ class PosController extends Controller
     {
         $saleModel = new Sale();
         $recallSale = null;
+        $recallToken = '';
         $heldId = (int) $request->query('held_id', 0);
         $receiptModal = Session::pullFlash('pos_receipt_modal');
 
@@ -32,6 +33,8 @@ class PosController extends Controller
             $recallSale = $saleModel->findDetailedForBranch($heldId, $this->branchId());
             if ($recallSale !== null && (string) ($recallSale['status'] ?? '') !== 'held') {
                 $recallSale = null;
+            } elseif ($recallSale !== null) {
+                $recallToken = $saleModel->heldSaleResumeToken($recallSale);
             }
         }
 
@@ -70,6 +73,7 @@ class PosController extends Controller
             'customers' => $seedCustomers,
             'heldSales' => $saleModel->heldSales($this->branchId()),
             'recallSale' => $recallSale,
+            'recallToken' => $recallToken,
             'receiptModal' => is_array($receiptModal) ? $receiptModal : null,
             'holdSubmissionKey' => $this->issueSubmissionKey(self::HOLD_SUBMISSION_SCOPE),
             'checkoutSubmissionKey' => $this->issueSubmissionKey(self::CHECKOUT_SUBMISSION_SCOPE),
@@ -139,7 +143,8 @@ class PosController extends Controller
                 branchId: $this->branchId(),
                 notes: trim((string) $request->input('notes', '')),
                 redeemPoints: max(0, (int) $request->input('redeem_points', 0)),
-                heldSaleId: $this->nullableInt($request->input('held_sale_id'))
+                heldSaleId: $this->nullableInt($request->input('held_sale_id')),
+                heldSaleToken: $this->nullableString($request->input('held_sale_token'))
             );
         } catch (Throwable $exception) {
             if ($request->isAjax()) {
@@ -236,7 +241,8 @@ class PosController extends Controller
                 branchId: $this->branchId(),
                 notes: trim((string) $request->input('notes', '')),
                 redeemPoints: max(0, (int) $request->input('redeem_points', 0)),
-                heldSaleId: $this->nullableInt($request->input('held_sale_id'))
+                heldSaleId: $this->nullableInt($request->input('held_sale_id')),
+                heldSaleToken: $this->nullableString($request->input('held_sale_token'))
             );
         } catch (Throwable $exception) {
             if ($request->isAjax()) {
@@ -381,6 +387,17 @@ class PosController extends Controller
     private function nullableInt(mixed $value): ?int
     {
         return $value === null || $value === '' ? null : (int) $value;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     private function heldSaleSummary(?array $sale): ?array

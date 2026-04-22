@@ -274,6 +274,41 @@ $tests['return lines require at least one valid quantity'] = static function ():
     );
 };
 
+$tests['held sale resume token is deterministic for same snapshot'] = static function (): void {
+    $sale = new Sale();
+    $snapshot = [
+        'id' => 88,
+        'status' => 'held',
+        'updated_at' => '2026-04-22 10:30:00',
+        'held_until' => '2026-04-23 10:30:00',
+        'grand_total' => 155.5,
+    ];
+
+    $tokenA = $sale->heldSaleResumeToken($snapshot);
+    $tokenB = $sale->heldSaleResumeToken($snapshot);
+
+    test_assert_true($tokenA !== '', 'Held sale token should not be empty for a valid sale snapshot.');
+    test_assert_same($tokenA, $tokenB, 'Held sale token should remain stable for the same snapshot.');
+};
+
+$tests['held sale resume token changes when held sale snapshot changes'] = static function (): void {
+    $sale = new Sale();
+    $baseline = [
+        'id' => 88,
+        'status' => 'held',
+        'updated_at' => '2026-04-22 10:30:00',
+        'held_until' => '2026-04-23 10:30:00',
+        'grand_total' => 155.5,
+    ];
+    $changed = $baseline;
+    $changed['updated_at'] = '2026-04-22 10:45:00';
+
+    test_assert_true(
+        $sale->heldSaleResumeToken($baseline) !== $sale->heldSaleResumeToken($changed),
+        'Held sale token should change when the held sale snapshot changes.'
+    );
+};
+
 $failures = [];
 
 foreach ($tests as $label => $callback) {
